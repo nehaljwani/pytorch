@@ -10,6 +10,7 @@
 #include <ATen/DeviceGuard.h>
 #include <ATen/ExpandUtils.h>
 #include <ATen/Parallel.h>
+#include <ATen/ThreadLocalDebugInfo.h>
 #include <c10/util/Exception.h>
 
 #include <atomic>
@@ -178,6 +179,7 @@ struct GraphTask {
   // exec_info_ is safe to read without synchronization
   std::unordered_map<Node*, ExecInfo> exec_info_;
   std::vector<Variable> captured_vars_;
+  std::shared_ptr<at::ThreadLocalDebugInfoBase> debug_info_ = at::getThreadLocalDebugInfo();
 
   void init_to_execute(Node& graph_root, const edge_list& outputs);
 
@@ -480,7 +482,8 @@ static variable_list call_function(NodeTask& task) {
   const auto has_post_hooks = !fn.post_hooks().empty();
   variable_list outputs;
 
-  if(has_post_hooks){
+  auto prev_info = at::setThreadLocalDebugInfo(task.base_->debug_info_);
+  if (has_post_hooks) {
     // In functions/accumulate_grad.cpp, there is some logic to check the conditions under which
     // the incoming gradient can be stolen directly (which elides a deep copy) instead of cloned.
     // One of these conditions is that the incoming gradient's refcount must be 1 (nothing else
@@ -495,9 +498,10 @@ static variable_list call_function(NodeTask& task) {
     // If you change the logic here, make sure it's compatible with accumulate_grad.cpp.
     auto inputs_copy = inputs;
     outputs = fn(std::move(inputs_copy));
-  }else{
+  } else {
     outputs = fn(std::move(inputs));
   }
+  at::setThreadLocalDebugInfo(prev_info);
 
   validate_outputs(fn.next_edges(), outputs, [&](const std::string& msg) {
     std::ostringstream ss;
