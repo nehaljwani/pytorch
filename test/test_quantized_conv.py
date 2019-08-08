@@ -3,6 +3,7 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import unittest
 import numpy as np
 import torch
 import torch.nn.quantized.functional as qF
@@ -12,9 +13,12 @@ from hypothesis import strategies as st
 import hypothesis_utils as hu
 
 from common_quantized import _conv_output_shape
-from common_utils import TestCase, run_tests
+from common_utils import TestCase, run_tests, TEST_WITH_UBSAN
 
-
+@unittest.skipIf(TEST_WITH_UBSAN or not torch.fbgemm_is_cpu_supported(),
+                 'Quantization requires FBGEMM. FBGEMM does not play'
+                 ' well with UBSAN at the moment, so we skip the test if'
+                 ' we are in a UBSAN environment.')
 class QuantizedConvTest(TestCase):
     @given(X=hu.tensor_conv2d(min_batch=1, max_batch=3,
                               min_in_channels=1, max_in_channels=7,
@@ -75,7 +79,6 @@ class QuantizedConvTest(TestCase):
                                          inputs_zero_point, inputs_qtype)
         q_filters = torch.quantize_linear(filters, filters_scale,
                                           filters_zero_point, filters_qtype)
-        q_filters_ref = torch.ops.quantized.fbgemm_conv_prepack(q_filters.permute([0, 2, 3, 1]), groups)
         q_bias = torch.quantize_linear(bias, bias_scale, bias_zero_point,
                                        bias_qtype)
 
@@ -84,6 +87,11 @@ class QuantizedConvTest(TestCase):
 
         # Results check
         try:
+            q_filters_ref = torch.ops.quantized.fbgemm_conv_prepack(q_filters.permute([0, 2, 3, 1]),
+                                                                    stride,
+                                                                    i_padding,
+                                                                    dilation,
+                                                                    groups)
             ref_result = ref_op(q_inputs.permute([0, 2, 3, 1]), q_filters_ref,
                                 q_bias, stride,
                                 i_padding, dilation,
