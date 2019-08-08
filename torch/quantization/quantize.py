@@ -214,8 +214,9 @@ DEFAULT_MODULE_MAPPING = {
     nn.Conv2d: nnq.Conv2d,
     QuantStub: nnq.Quantize,
     DeQuantStub: nnq.DeQuantize,
-    # Generated modules:
-    nn.Add: nnq.Add,
+    # Wrapped modules:
+    nnq.UnaryWrapper: nnq.QuantizedUnaryWrapper,
+    nnq.BinaryWrapper: nnq.QuantizedBinaryWrapper,
     # QAT modules:
     qat.Linear: nnq.Linear,
     qat.Conv2d: nnq.Conv2d,

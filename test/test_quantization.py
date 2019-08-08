@@ -290,6 +290,72 @@ class QuantizationAwareTrainingTest(QuantizationTestCase):
         checkQuantized(model)
 
 
+class ScriptabilityTest(QuantizationTestCase):
+    def test_wrapper_traceable(self):
+        UnaryWrapper = nnq.modules.wrapper_module.UnaryWrapper
+        QUnaryWrapper = nnq.modules.wrapper_module.QuantizedUnaryWrapper
+        script_module = torch.jit.trace(UnaryWrapper(torch.cat),
+                                        (torch.tensor(0), torch.tensor(0)))
+        script_qmodule = torch.jit.trace(QUnaryWrapper(torch.cat),
+                                         (torch.tensor(0), torch.tensor(0)))
+
+        a = torch.tensor(24)
+        b = torch.tensor(42)
+        y = torch.cat((a, b))
+        y_hat = script_module((a, b))
+        self.assertEqual(y, y_hat,
+                         "Results of the traced unary wrapper are off!")
+        y_hat = script_qmodule((a, b))
+        self.assertEqual(y, y_hat,
+                         "Results of the traced unary qwrapper are off!")
+
+        BinaryWrapper = nnq.modules.wrapper_module.BinaryWrapper
+        QBinaryWrapper = nnq.modules.wrapper_module.QuantizedBinaryWrapper
+        script_module = torch.jit.trace(BinaryWrapper(torch.add),
+                                        (torch.tensor(0), torch.tensor(0)))
+        script_qmodule = torch.jit.trace(QBinaryWrapper(torch.add),
+                                         (torch.tensor(0), torch.tensor(0)))
+
+        a = torch.tensor(24)
+        b = torch.tensor(42)
+        y = a + b
+        y_hat = script_module(a, b)
+        self.assertEqual(y, y_hat,
+                         "Results of the traced binary wrapper are off!")
+        y_hat = script_qmodule(a, b)
+        self.assertEqual(y, y_hat,
+                         "Results of the traced binary wrapper are off!")
+
+    def test_wrapper_scriptable(self):
+        UnaryWrapper = nnq.modules.wrapper_module.UnaryWrapper
+        QUnaryWrapper = nnq.modules.wrapper_module.QuantizedUnaryWrapper
+        script_module = torch.jit.script(UnaryWrapper(torch.cat))
+        script_qmodule = torch.jit.script(QUnaryWrapper(torch.cat))
+
+        a = torch.tensor(24)
+        b = torch.tensor(42)
+        y = torch.cat((a, b))
+        y_hat = script_module((a, b))
+        self.assertEqual(y, y_hat,
+                         "Results of the scripted unary wrapper are off!")
+        y_hat = script_qmodule((a, b))
+        self.assertEqual(y, y_hat,
+                         "Results of the scripteed unary qwrapper are off!")
+
+        BinaryWrapper = nnq.modules.wrapper_module.BinaryWrapper
+        QBinaryWrapper = nnq.modules.wrapper_module.QuantizedBinaryWrapper
+        script_module = torch.jit.script(BinaryWrapper(torch.add))
+        script_qmodule = torch.jit.script(QBinaryWrapper(torch.add))
+
+        y = a + b
+        y_hat = script_module(a, b)
+        self.assertEqual(y, y_hat,
+                         "Results of the scripted binary wrapper are off!")
+        y_hat = script_qmodule(a, b)
+        self.assertEqual(y, y_hat,
+                         "Results of the scripted binary wrapper are off!")
+
+
 class FusionTest(QuantizationTestCase):
     def test_fuse_module_train(self):
         import torch.nn._intrinsic.modules.fused as torch_fused
